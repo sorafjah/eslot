@@ -213,7 +213,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SETS_DIR = 'sets/';
 
 /* ---------- 設定 ---------- */
-const defaults = { count:3, mode:'random', noDup:true, preset:[null,null,null], sound:true, duration:'normal', showNames:true, samplesLoaded:false, source:'local', showTitle:true };
+const defaults = { count:3, mode:'random', noDup:true, preset:[null,null,null], sound:true, duration:'normal', showNames:true, samplesLoaded:false, source:'local', sourceChosen:false, showTitle:true };
 let settings = Object.assign({}, defaults);
 try { Object.assign(settings, JSON.parse(localStorage.getItem('eslotSettings') || '{}')); } catch(e) {}
 function save(){ try { localStorage.setItem('eslotSettings', JSON.stringify(settings)); } catch(e) {} }
@@ -352,7 +352,7 @@ function renderSources(){
     const b = document.createElement('button'); b.className = 'src';
     if (settings.source === id) b.classList.add('on');
     b.textContent = label;
-    b.onclick = () => { if (settings.source !== id) useSource(id); };
+    b.onclick = () => { settings.sourceChosen = true; if (settings.source !== id) useSource(id); else save(); };
     box.append(b);
   };
   mk('local', '📱 この端末の画像');
@@ -794,7 +794,7 @@ document.addEventListener('keydown', e => {
   state.images = state.local;
   await loadSetList();
   const q = new URLSearchParams(location.search).get('set');
-  const want = q || settings.source;
+  const want = q || (!settings.sourceChosen && state.sets.length ? state.sets[0].id : settings.source);
   buildReels(); syncUI(); applyText();
   if (want && want !== 'local') await useSource(want);
   else { settings.source = 'local'; afterImagesChanged(); }
