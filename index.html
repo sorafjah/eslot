@@ -629,6 +629,7 @@ async function stopAll(){
   await sleep(1200);                    // 止まってから、ひと呼吸おく
   machine.classList.add('win');
   sfx.jaan();
+  confetti();
   const N = state.images.length;
   state.reels.forEach(r => {
     r.nameEl.textContent = state.images[mod(Math.round(r.pos), N)].name;
@@ -636,9 +637,6 @@ async function stopAll(){
   });
   state.phase = 'idle'; state.spinning = false;
   $('#gearBtn').disabled = false; setBtn('start');
-  const tk = confettiToken;
-  await sleep(900);                     // さらに間をおいて、紙吹雪
-  if (tk === confettiToken) confetti();
 }
 
 /* ---------- 紙吹雪 ---------- */
@@ -649,34 +647,25 @@ function confetti(){
   const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
   cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const colors = ['#ffca28','#ff5c8a','#66bb6a','#42a5f5','#ab47bc','#ff7043','#26c6da'];
-  const ps = [];
-  const EMIT = 4200;                     // この時間のあいだ、少しずつ降らせる
-  const t0 = performance.now(); let last = t0, acc = 0;
+  const box = machine.getBoundingClientRect();
+  const ps = Array.from({ length:150 }, (_, i) => ({
+    x: box.left + Math.random() * box.width, y: box.top + box.height * 0.3,
+    vx: (Math.random() - .5) * 14, vy: -Math.random() * 15 - 5,
+    r: Math.random() * 7 + 5, c: colors[i % colors.length],
+    a: Math.random() * 6, va: (Math.random() - .5) * 0.3
+  }));
+  const t0 = performance.now();
   (function f(t){
     if (tk !== confettiToken){ ctx.clearRect(0, 0, W, H); return; }
-    const dt = Math.min(0.05, (t - last) / 1000); last = t;
     const el = t - t0;
-    if (el < EMIT){
-      acc += dt * 26;                    // 1秒に26こくらい
-      while (acc >= 1){ acc--; ps.push({
-        x: Math.random() * W, y: -12,
-        vy: 55 + Math.random() * 55,      // ゆっくり落ちる（px/秒）
-        sway: 20 + Math.random() * 30, ph: Math.random() * 6, fr: 1 + Math.random() * 1.5,
-        r: Math.random() * 7 + 7, c: colors[ps.length % colors.length],
-        a: Math.random() * 6, va: (Math.random() - .5) * 3
-      }); }
-    }
     ctx.clearRect(0, 0, W, H);
-    let alive = 0;
     for (const q of ps){
-      q.y += q.vy * dt; q.a += q.va * dt; q.ph += q.fr * dt;
-      if (q.y > H + 20) continue;
-      alive++;
-      ctx.save(); ctx.translate(q.x + Math.sin(q.ph) * q.sway, q.y); ctx.rotate(q.a);
-      ctx.scale(1, Math.abs(Math.cos(q.ph * 1.3)) * .8 + .2);
-      ctx.fillStyle = q.c; ctx.fillRect(-q.r / 2, -q.r / 3, q.r, q.r * 2 / 3); ctx.restore();
+      q.vy += 0.35; q.vx *= 0.99; q.x += q.vx; q.y += q.vy; q.a += q.va;
+      ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a);
+      ctx.globalAlpha = Math.max(0, 1 - el / 2800); ctx.fillStyle = q.c;
+      ctx.fillRect(-q.r / 2, -q.r / 4, q.r, q.r / 2); ctx.restore();
     }
-    if (el < EMIT || alive) requestAnimationFrame(f); else ctx.clearRect(0, 0, W, H);
+    if (el < 2800) requestAnimationFrame(f); else ctx.clearRect(0, 0, W, H);
   })(t0);
 }
 
