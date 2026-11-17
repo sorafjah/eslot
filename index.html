@@ -65,6 +65,8 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;justify-conten
   background:var(--start);color:#fff;box-shadow:0 7px 0 var(--start-dark);
   transition:transform .08s,box-shadow .08s;
 }
+#startBtn.stop{background:#e53935;box-shadow:0 7px 0 #a82320}
+#startBtn.stop:active{box-shadow:0 2px 0 #a82320}
 #startBtn:active{transform:translateY(5px);box-shadow:0 2px 0 var(--start-dark)}
 #startBtn:disabled{filter:grayscale(.5) brightness(1.1);cursor:default}
 .hint{color:#666;font-size:1rem;text-align:center}
@@ -152,9 +154,9 @@ label.chk input{width:22px;height:22px}
       <div id="presetBox"></div>
     </div>
 
-    <h3>回る時間・音・表示</h3>
+    <h3>止まり方・音</h3>
     <div class="seg" data-key="duration">
-      <button data-v="short">みじかい</button><button data-v="normal">ふつう</button><button data-v="long">ながい</button>
+      <button data-v="short">はやめ</button><button data-v="normal">ゆっくり</button><button data-v="long">とてもゆっくり</button>
     </div>
     <div class="row">
       <label class="chk"><input type="checkbox" data-key="sound"> 音を鳴らす</label>
@@ -238,7 +240,7 @@ async function dbDel(id){ if(!db) return; try { await p(store('readwrite').delet
 async function dbClear(){ if(!db) return; try { await p(store('readwrite').clear()); } catch(e){} }
 
 /* ---------- 画像 ---------- */
-const state = { images:[], local:[], reels:[], spinning:false, sets:[] };
+const state = { images:[], local:[], reels:[], spinning:false, phase:'idle', sets:[] };
 const isLocal = () => settings.source === 'local';
 
 async function loadLocal(){
@@ -520,8 +522,8 @@ function loop(t){
     } else if (r.state === 'stopping'){
       const x = Math.min(1, (t - r.stopStart) / r.stopDur);
       const D = r.stopTo - r.stopFrom;
-      r.pos = r.stopFrom + D * (1 - Math.pow(1 - x, 3));
-      v = 3 * Math.pow(1 - x, 2) * D / (r.stopDur / 1000);
+      r.pos = r.stopFrom + D * (1 - Math.pow(1 - x, 4));
+      v = 4 * Math.pow(1 - x, 3) * D / (r.stopDur / 1000);
       r.vel = v;
       if (x >= 1){ r.pos = r.stopTo; r.state = 'idle'; r.vel = 0; v = 0; landed(r); }
       else active = true;
@@ -534,15 +536,17 @@ function loop(t){
   if (ticked && t - lastTick > 40){ lastTick = t; sfx.tick(); }
   if (active) requestAnimationFrame(loop); else rafOn = false;
 }
-function stopReel(r){
+function stopReel(r, T){
   return new Promise(res => {
     const N = state.images.length;
-    const v = Math.max(r.vel, 5);
-    let F = Math.ceil(r.pos + v * 0.3);
-    F += mod(r.target - F, N);
+    const v = Math.max(r.vel, 8);
+    // T秒かけて、ターゲットの絵にぴったり止まる位置を選ぶ（出だしの速さを変えないよう T から距離を決める）
+    const want = r.pos + v * T / 4;
+    let F = r.target + Math.round((want - r.target) / N) * N;
+    if (F < r.pos + v * T / 8) F += N;
     const D = F - r.pos;
     r.stopFrom = r.pos; r.stopTo = F;
-    r.stopDur = Math.min(1700, Math.max(700, 3 * D / v * 1000));
+    r.stopDur = 4 * D / v * 1000;
     r.stopStart = performance.now();
     r.state = 'stopping'; r.onDone = res;
     kick();
@@ -580,14 +584,24 @@ function pickTargets(){
   return Array.from({ length:n }, rand);
 }
 
-async function start(){
-  if (state.spinning) return;
+function setBtn(mode){
+  // mode: start / stop / wait
+  startBtn.className = mode === 'stop' ? 'stop' : '';
+  startBtn.textContent = mode === 'start' ? 'スタート' : 'ストップ';
+  startBtn.disabled = mode === 'wait';
+}
+function onBtn(){
+  if (state.phase === 'idle') start();
+  else if (state.phase === 'spinning') stopAll();
+}
+function start(){
+  if (state.phase !== 'idle') return;
   if (!state.images.length){ openSettings(); return; }
   ensureAudio();
-  state.spinning = true; startBtn.disabled = true; $('#gearBtn').disabled = true;
+  state.phase = 'spinning'; state.spinning = true; $('#gearBtn').disabled = true;
+  confettiToken++; $('#fx').getContext('2d').clearRect(0, 0, $('#fx').width, $('#fx').height);
   machine.classList.remove('win');
   state.reels.forEach(r => r.nameEl.classList.remove('show'));
-
   const targets = pickTargets();
   const now = performance.now();
   state.reels.forEach((r, i) => {
@@ -596,51 +610,73 @@ async function start(){
     r.target = targets[i];
   });
   kick();
-  await sleep({ short:900, normal:1800, long:3200 }[settings.duration] || 1800);
-
+  setBtn('wait');                       // 回りはじめの少しのあいだは押せない
+  setTimeout(() => { if (state.phase === 'spinning') setBtn('stop'); }, 700);
+}
+async function stopAll(){
+  if (state.phase !== 'spinning' || startBtn.disabled) return;
+  state.phase = 'stopping'; setBtn('wait');
+  const n = state.reels.length;
+  const base = { short:2200, normal:3600, long:5500 }[settings.duration] || 3600;
   const waits = [];
-  for (let i = 0; i < state.reels.length; i++){
-    waits.push(stopReel(state.reels[i]));
-    if (i < state.reels.length - 1) await sleep(650);
+  for (let i = 0; i < n; i++){
+    // あとのリールほど、じりじりと長くかけて止まる
+    const f = n === 1 ? 1.4 : 1 + 0.4 * i;
+    waits.push(stopReel(state.reels[i], base * f / 1000));
+    if (i < n - 1) await sleep(1300);
   }
   await Promise.all(waits);
-  await sleep(180);
-
+  await sleep(1200);                    // 止まってから、ひと呼吸おく
   machine.classList.add('win');
   sfx.jaan();
-  confetti();
   const N = state.images.length;
   state.reels.forEach(r => {
     r.nameEl.textContent = state.images[mod(Math.round(r.pos), N)].name;
     if (settings.showNames) r.nameEl.classList.add('show');
   });
-  state.spinning = false; startBtn.disabled = false; $('#gearBtn').disabled = false;
+  state.phase = 'idle'; state.spinning = false;
+  $('#gearBtn').disabled = false; setBtn('start');
+  const tk = confettiToken;
+  await sleep(900);                     // さらに間をおいて、紙吹雪
+  if (tk === confettiToken) confetti();
 }
 
 /* ---------- 紙吹雪 ---------- */
+let confettiToken = 0;
 function confetti(){
+  const tk = ++confettiToken;
   const cv = $('#fx'), ctx = cv.getContext('2d');
   const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
-  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const colors = ['#ffca28','#ff5c8a','#66bb6a','#42a5f5','#ab47bc','#ff7043','#26c6da'];
-  const box = machine.getBoundingClientRect();
-  const ps = Array.from({ length:150 }, (_, i) => ({
-    x: box.left + Math.random() * box.width, y: box.top + box.height * 0.3,
-    vx: (Math.random() - .5) * 14, vy: -Math.random() * 15 - 5,
-    r: Math.random() * 7 + 5, c: colors[i % colors.length],
-    a: Math.random() * 6, va: (Math.random() - .5) * 0.3
-  }));
-  const t0 = performance.now();
+  const ps = [];
+  const EMIT = 4200;                     // この時間のあいだ、少しずつ降らせる
+  const t0 = performance.now(); let last = t0, acc = 0;
   (function f(t){
+    if (tk !== confettiToken){ ctx.clearRect(0, 0, W, H); return; }
+    const dt = Math.min(0.05, (t - last) / 1000); last = t;
     const el = t - t0;
-    ctx.clearRect(0, 0, W, H);
-    for (const q of ps){
-      q.vy += 0.35; q.vx *= 0.99; q.x += q.vx; q.y += q.vy; q.a += q.va;
-      ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a);
-      ctx.globalAlpha = Math.max(0, 1 - el / 2800); ctx.fillStyle = q.c;
-      ctx.fillRect(-q.r / 2, -q.r / 4, q.r, q.r / 2); ctx.restore();
+    if (el < EMIT){
+      acc += dt * 26;                    // 1秒に26こくらい
+      while (acc >= 1){ acc--; ps.push({
+        x: Math.random() * W, y: -12,
+        vy: 55 + Math.random() * 55,      // ゆっくり落ちる（px/秒）
+        sway: 20 + Math.random() * 30, ph: Math.random() * 6, fr: 1 + Math.random() * 1.5,
+        r: Math.random() * 7 + 7, c: colors[ps.length % colors.length],
+        a: Math.random() * 6, va: (Math.random() - .5) * 3
+      }); }
     }
-    if (el < 2800) requestAnimationFrame(f); else ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (const q of ps){
+      q.y += q.vy * dt; q.a += q.va * dt; q.ph += q.fr * dt;
+      if (q.y > H + 20) continue;
+      alive++;
+      ctx.save(); ctx.translate(q.x + Math.sin(q.ph) * q.sway, q.y); ctx.rotate(q.a);
+      ctx.scale(1, Math.abs(Math.cos(q.ph * 1.3)) * .8 + .2);
+      ctx.fillStyle = q.c; ctx.fillRect(-q.r / 2, -q.r / 3, q.r, q.r * 2 / 3); ctx.restore();
+    }
+    if (el < EMIT || alive) requestAnimationFrame(f); else ctx.clearRect(0, 0, W, H);
   })(t0);
 }
 
@@ -746,10 +782,10 @@ document.addEventListener('paste', e => {
   if (files.length){ e.preventDefault(); addFiles(files); }
 });
 
-startBtn.onclick = start;
+startBtn.onclick = onBtn;
 document.addEventListener('keydown', e => {
   if (!settingsEl.hidden) { if (e.key === 'Escape') closeSettings(); return; }
-  if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); start(); }
+  if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); onBtn(); }
 });
 
 /* ---------- 起動 ---------- */
