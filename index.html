@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>えスロット</title>
+<style>
+:root{
+  --size:240px; --gap:18px;
+  --accent:#ff7043; --accent-dark:#d84315;
+  --start:#1e88e5; --start-dark:#1259a3;
+  --frame1:#ffd54f;
+  --glow:#ff4f81;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:"BIZ UDPGothic","BIZ UDゴシック","Hiragino Kaku Gothic ProN","Hiragino Sans","Meiryo",sans-serif;
+  background:#fff8e1;
+  color:#333; min-height:100dvh; display:flex; flex-direction:column;
+  -webkit-user-select:none; user-select:none; touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+header h1{font-size:1.5rem;margin:0;letter-spacing:.08em;color:var(--accent-dark)}
+.gear{
+  font-size:1.6rem;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+  background:none;box-shadow:none;
+}
+.gear:disabled{opacity:.35}
+main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:8px 16px 24px}
+
+.machine{
+  display:flex;gap:var(--gap);padding:18px;border-radius:30px;
+  background:var(--frame1);
+}
+.reel{
+  width:var(--size);height:var(--size);background:#fff;border-radius:18px;
+  overflow:hidden;position:relative;box-shadow:inset 0 0 0 4px #fff3c4;
+}
+.reel.empty::before{
+  content:"？";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--size)*.5);color:#ccc;font-weight:bold;
+}
+.strip{position:absolute;inset:0}
+.cell{position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;will-change:transform}
+.cell img{max-width:88%;max-height:88%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.reel.pop{animation:pop .3s ease-out}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+.machine.win .reel{animation:glow .9s ease-in-out infinite alternate}
+@keyframes glow{
+  from{box-shadow:inset 0 0 0 4px #fff3c4,0 0 0 5px var(--glow),0 0 14px 4px rgba(255,79,129,.45)}
+  to{box-shadow:inset 0 0 0 4px #fff3c4,0 0 0 8px var(--glow),0 0 30px 12px rgba(255,79,129,.7)}
+}
+.names{display:flex;gap:var(--gap);min-height:2.4em;padding:0 18px}
+.name{
+  width:var(--size);text-align:center;font-size:clamp(1.2rem,calc(var(--size)*.13),2.6rem);
+  font-weight:bold;visibility:hidden;word-break:break-all;line-height:1.2;color:#333;
+}
+.name.show{visibility:visible;animation:pop .4s}
+#startBtn{
+  font-family:inherit;font-size:clamp(1.6rem,4vw,2.4rem);font-weight:bold;letter-spacing:.1em;
+  padding:16px 64px;border-radius:999px;border:none;cursor:pointer;
+  background:var(--start);color:#fff;box-shadow:0 7px 0 var(--start-dark);
+  transition:transform .08s,box-shadow .08s;
+}
+#startBtn:active{transform:translateY(5px);box-shadow:0 2px 0 var(--start-dark)}
+#startBtn:disabled{filter:grayscale(.5) brightness(1.1);cursor:default}
+.hint{color:#666;font-size:1rem;text-align:center}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+
+/* 設定パネル */
+.overlay{position:fixed;inset:0;background:rgba(60,60,80,.35);z-index:10;display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:20px 12px}
+.overlay[hidden]{display:none}
+.sheet{background:#fff;color:#222;border-radius:20px;width:min(760px,100%);padding:18px 20px 24px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sheet h2{margin:0;font-size:1.3rem}
+.sheet h3{font-size:1.05rem;margin:22px 0 8px;padding-left:8px;border-left:6px solid var(--accent)}
+.btn{font-family:inherit;font-size:1rem;padding:10px 16px;border-radius:12px;border:2px solid #ccc;background:#f7f7f7;color:#222;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:bold}
+.btn.danger{border-color:#e57373;color:#c62828;background:#fff}
+.btn:disabled{opacity:.4;cursor:default}
+.seg{display:inline-flex;flex-wrap:wrap;border:2px solid #ccc;border-radius:12px;overflow:hidden}
+.seg button{font-family:inherit;font-size:1.05rem;padding:10px 18px;border:none;background:#fff;color:#333;cursor:pointer;border-right:1px solid #ddd}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--accent);color:#fff;font-weight:bold}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+label.chk{display:flex;align-items:center;gap:8px;font-size:1rem;cursor:pointer}
+label.chk input{width:22px;height:22px}
+.note{font-size:.9rem;color:#666;margin:4px 0;line-height:1.5}
+.prow{margin:10px 0}
+.prow .plabel{font-weight:bold;margin-bottom:4px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 8px}
+.chip{flex:0 0 auto;width:72px;height:72px;border-radius:12px;border:3px solid #ddd;background:#fafafa;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:4px;font-family:inherit;font-size:.85rem;color:#555}
+.chip img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none}
+.chip.on{border-color:var(--accent);background:#fff3e0;box-shadow:0 0 0 2px var(--accent)}
+.sources{display:flex;flex-wrap:wrap;gap:8px}
+.src{font-family:inherit;font-size:1rem;padding:10px 14px;border-radius:12px;border:2px solid #ccc;background:#fff;cursor:pointer;color:#333}
+.src.on{border-color:var(--accent);background:#fff3e0;font-weight:bold;box-shadow:0 0 0 2px var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.card{border:2px solid #e0e0e0;border-radius:12px;padding:6px;position:relative;background:#fafafa}
+.card .th{height:90px;display:flex;align-items:center;justify-content:center}
+.card .th img{max-width:100%;max-height:100%;object-fit:contain}
+.card input{width:100%;font-family:inherit;font-size:.95rem;padding:6px;border:1px solid #ccc;border-radius:8px;margin-top:4px;-webkit-user-select:text;user-select:text}
+.card input:disabled{background:transparent;border-color:transparent;color:#333;text-align:center}
+.card .del{position:absolute;top:-8px;right:-8px;width:30px;height:30px;border-radius:50%;border:none;background:#e53935;color:#fff;font-size:1rem;cursor:pointer}
+.drop{border:3px dashed #bbb;border-radius:14px;padding:14px;text-align:center;color:#666;margin-bottom:10px}
+.drop.over{border-color:var(--accent);background:#fff3e0}
+.box{background:#f6f9ff;border:2px solid #d6e4ff;border-radius:14px;padding:12px 14px;margin-top:12px}
+.box input[type=text]{font-family:inherit;font-size:1rem;padding:8px;border:1px solid #bbb;border-radius:8px;width:12em;-webkit-user-select:text;user-select:text}
+.urlline{font-family:ui-monospace,monospace;font-size:.9rem;background:#fff;border:1px solid #ccc;border-radius:8px;padding:8px;word-break:break-all;-webkit-user-select:text;user-select:text;flex:1;min-width:200px}
+.msg{font-size:.95rem;color:#c62828;margin:6px 0}
+.msg.ok{color:#2e7d32}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">🎰 えスロット</h1>
+  <button class="gear" id="gearBtn" aria-label="設定">⚙️</button>
+</header>
+
+<main>
+  <div class="machine" id="machine"></div>
+  <div class="names" id="names"></div>
+  <button id="startBtn">スタート</button>
+  <div class="hint" id="hint" hidden>⚙️ から画像を入れてください</div>
+</main>
+<canvas id="fx"></canvas>
+
+<div class="overlay" id="settings" hidden>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>⚙️ 設定</h2>
+      <button class="btn primary" id="closeBtn">とじる</button>
+    </div>
+
+    <h3>まい数</h3>
+    <div class="seg" data-key="count">
+      <button data-v="1">1まい</button><button data-v="2">2まい</button><button data-v="3">3まい</button>
+    </div>
+
+    <h3>止め方</h3>
+    <div class="seg" data-key="mode">
+      <button data-v="random">ランダム</button><button data-v="preset">先に決める</button>
+    </div>
+    <div id="randomOpts" class="row">
+      <label class="chk"><input type="checkbox" data-key="noDup"> 同じ画像がならばないようにする</label>
+    </div>
+    <div id="presetOpts">
+      <p class="note">それぞれのリールで止まる画像を選びます。「おまかせ」はランダムです。<br>この設定はスロットの画面には表示されません。</p>
+      <div id="presetBox"></div>
+    </div>
+
+    <h3>回る時間・音・表示</h3>
+    <div class="seg" data-key="duration">
+      <button data-v="short">みじかい</button><button data-v="normal">ふつう</button><button data-v="long">ながい</button>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" data-key="sound"> 音を鳴らす</label>
+    </div>
+    <h3>文字の表示</h3>
+    <div class="row"><b>決まった画像の名前：</b>
+      <div class="seg" data-key="showNames" data-bool="1"><button data-v="true">出す</button><button data-v="false">出さない</button></div>
+    </div>
+    <div class="row"><b>上のタイトル：</b>
+      <div class="seg" data-key="showTitle" data-bool="1"><button data-v="true">出す</button><button data-v="false">出さない</button></div>
+    </div>
+
+    <h3>つかう画像</h3>
+    <div class="sources" id="sources"></div>
+    <p class="note" id="setsNote"></p>
+    <div id="setLinkRow" class="row" hidden>
+      <span>このセットを直接開くURL：</span>
+      <div class="urlline" id="setLink"></div>
+      <button class="btn" id="copyLinkBtn">コピー</button>
+    </div>
+
+    <div id="localArea">
+      <div class="drop" id="drop">
+        ここに画像をドラッグ、または貼り付け（Ctrl+V）もできます<br><br>
+        <button class="btn primary" id="addBtn">＋ 画像を追加</button>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      </div>
+      <p class="note">「この端末の画像」は、この端末のブラウザの中だけに保存されます（インターネットには送られません）。名前は下の欄で変えられます。</p>
+    </div>
+    <div class="grid" id="imgGrid"></div>
+    <div class="row" id="localBtns" style="margin-top:14px">
+      <button class="btn" id="sampleBtn">サンプル画像を入れる</button>
+      <button class="btn danger" id="clearBtn">画像をすべて消す</button>
+    </div>
+
+    <div class="box" id="exportBox">
+      <b>📦 今の画像を「画像セット」として書き出す</b>
+      <p class="note">GitHubに置くと、どの端末からでも同じ画像で使えます。名前（英数字）は URL に使われます。</p>
+      <div class="row">
+        <label>セットの名前（英数字）<br><input type="text" id="setId" placeholder="kudamono" autocapitalize="off" autocomplete="off"></label>
+        <label>表示する名前<br><input type="text" id="setTitle" placeholder="くだもの"></label>
+      </div>
+      <div class="row"><button class="btn primary" id="exportBtn">ZIPで書き出す</button></div>
+      <div class="msg" id="exportMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const mod = (a, n) => ((a % n) + n) % n;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const SETS_DIR = 'sets/';
+
+/* ---------- 設定 ---------- */
+const defaults = { count:3, mode:'random', noDup:true, preset:[null,null,null], sound:true, duration:'normal', showNames:true, samplesLoaded:false, source:'local', showTitle:true };
+let settings = Object.assign({}, defaults);
+try { Object.assign(settings, JSON.parse(localStorage.getItem('eslotSettings') || '{}')); } catch(e) {}
+function save(){ try { localStorage.setItem('eslotSettings', JSON.stringify(settings)); } catch(e) {} }
+
+/* ---------- IndexedDB（使えないときはメモリだけで動く） ---------- */
+let db = null;
+function openDB(){
+  return new Promise((res, rej) => {
+    let done = false;
+    const timer = setTimeout(() => { if (!done){ done = true; rej(new Error('timeout')); } }, 1500);
+    try {
+      const r = indexedDB.open('eslotDB', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('images', { keyPath:'id' });
+      r.onsuccess = () => { if (!done){ done = true; clearTimeout(timer); res(r.result); } };
+      r.onerror = () => { if (!done){ done = true; clearTimeout(timer); rej(r.error); } };
+    } catch(e){ done = true; clearTimeout(timer); rej(e); }
+  });
+}
+const store = mode => db.transaction('images', mode).objectStore('images');
+const p = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function dbAll(){ if(!db) return []; try { return await p(store('readonly').getAll()); } catch(e){ return []; } }
+async function dbPut(o){ if(!db) return; try { await p(store('readwrite').put(o)); } catch(e){} }
+async function dbDel(id){ if(!db) return; try { await p(store('readwrite').delete(id)); } catch(e){} }
+async function dbClear(){ if(!db) return; try { await p(store('readwrite').clear()); } catch(e){} }
+
+/* ---------- 画像 ---------- */
+const state = { images:[], local:[], reels:[], spinning:false, sets:[] };
+const isLocal = () => settings.source === 'local';
+
+async function loadLocal(){
+  const rows = await dbAll();
+  rows.sort((a, b) => a.order - b.order);
+  state.local.forEach(i => URL.revokeObjectURL(i.url));
+  state.local = rows.map(r => ({ ...r, url: URL.createObjectURL(r.blob) }));
+}
+function loadImg(url){
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+}
+async function shrink(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImg(url);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return file;
+    const s = Math.min(1, 800 / Math.max(w, h));
+    if (s === 1 && file.size < 1.5e6) return file;
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * s); c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const type = /png|gif|webp|svg/.test(file.type) ? 'image/png' : 'image/jpeg';
+    return await new Promise(r => c.toBlob(b => r(b || file), type, 0.9));
+  } catch(e) { return file; }
+  finally { URL.revokeObjectURL(url); }
+}
+async function addFiles(files){
+  if (!isLocal()) return;
+  const list = [...files].filter(f => f.type && f.type.startsWith('image/'));
+  if (!list.length) return;
+  let order = Date.now();
+  for (const f of list){
+    const blob = await shrink(f);
+    const o = { id:'i' + order + Math.random().toString(36).slice(2,6), name:(f.name || '画像').replace(/\.[^.]+$/, ''), blob, order:order++ };
+    await dbPut(o);
+    state.local.push({ ...o, url: URL.createObjectURL(blob) });
+  }
+  state.images = state.local;
+  afterImagesChanged();
+}
+async function sampleFiles(){
+  const items = [['🍎','りんご'],['🍌','バナナ'],['🍇','ぶどう'],['🍒','さくらんぼ'],['⭐','ほし'],['🔔','ベル'],['🍉','すいか']];
+  const files = [];
+  for (const [e, n] of items){
+    const c = document.createElement('canvas'); c.width = c.height = 300;
+    const x = c.getContext('2d');
+    x.font = '220px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(e, 150, 165);
+    const b = await new Promise(r => c.toBlob(r, 'image/png'));
+    if (b) files.push(new File([b], n + '.png', { type:'image/png' }));
+  }
+  return files;
+}
+function afterImagesChanged(){
+  const ids = new Set(state.images.map(i => i.id));
+  settings.preset = settings.preset.map(id => ids.has(id) ? id : null);
+  save();
+  renderImageList(); renderPreset(); renderSources();
+  state.reels.forEach(r => { r.cells.forEach(c => c.i = -1); render(r); });
+  $('#hint').hidden = state.images.length > 0;
+}
+
+/* ---------- 画像セット（GitHub などに置いたもの） ---------- */
+async function fetchJSON(url){
+  const r = await fetch(url, { cache:'no-cache' });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function loadSetList(){
+  try {
+    const j = await fetchJSON(SETS_DIR + 'list.json');
+    state.sets = Array.isArray(j.sets) ? j.sets.filter(s => s && s.id) : [];
+  } catch(e){ state.sets = []; }
+}
+async function loadSet(id){
+  const base = new URL(SETS_DIR + encodeURIComponent(id) + '/', location.href);
+  const j = await fetchJSON(new URL('set.json', base));
+  const imgs = (j.images || []).map((im, i) => ({
+    id: id + '/' + im.file,
+    name: im.name || im.file.replace(/\.[^.]+$/, ''),
+    url: new URL(im.file, base).href,
+    remote: true, order: i
+  }));
+  if (!imgs.length) throw new Error('empty');
+  if (!state.sets.find(s => s.id === id)) state.sets.push({ id, title: j.title || id });
+  return imgs;
+}
+async function useSource(src){
+  const msg = $('#setsNote');
+  if (src === 'local'){
+    settings.source = 'local'; state.images = state.local;
+  } else {
+    try {
+      state.images = await loadSet(src);
+      settings.source = src;
+    } catch(e){
+      msg.textContent = `「${src}」のセットが読みこめませんでした。sets/${src}/set.json があるか確かめてください。`;
+      settings.source = 'local'; state.images = state.local;
+    }
+  }
+  save();
+  afterImagesChanged();
+}
+function renderSources(){
+  const box = $('#sources'); box.innerHTML = '';
+  const mk = (id, label) => {
+    const b = document.createElement('button'); b.className = 'src';
+    if (settings.source === id) b.classList.add('on');
+    b.textContent = label;
+    b.onclick = () => { if (settings.source !== id) useSource(id); };
+    box.append(b);
+  };
+  mk('local', '📱 この端末の画像');
+  state.sets.forEach(s => mk(s.id, '🗂 ' + (s.title || s.id)));
+  const note = $('#setsNote');
+  if (!note.textContent || isLocal()) {
+    note.textContent = state.sets.length ? '' : '画像セットはまだありません（下の「書き出す」で作れます）。';
+  }
+  const local = isLocal();
+  $('#localArea').hidden = !local;
+  $('#localBtns').hidden = !local;
+  $('#exportBox').hidden = !local;
+  $('#setLinkRow').hidden = local;
+  if (!local){
+    const u = new URL(location.href); u.search = '?set=' + encodeURIComponent(settings.source); u.hash = '';
+    $('#setLink').textContent = u.href;
+  }
+}
+$('#copyLinkBtn').onclick = async () => {
+  const t = $('#setLink').textContent;
+  try { await navigator.clipboard.writeText(t); $('#copyLinkBtn').textContent = 'コピーしました'; }
+  catch(e){ $('#copyLinkBtn').textContent = '長押しでコピーしてください'; }
+  setTimeout(() => $('#copyLinkBtn').textContent = 'コピー', 2000);
+};
+
+/* ---------- ZIP 書き出し（圧縮なし） ---------- */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b){ let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files){
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  for (const f of files){
+    const nm = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+    lh.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(lh.buffer), nm, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+    ch.setUint16(28, nm.length, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), nm);
+    offset += 30 + nm.length + size;
+  }
+  const cd = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cd, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type:'application/zip' });
+}
+const extOf = t => ({ 'image/png':'png', 'image/jpeg':'jpg', 'image/gif':'gif', 'image/webp':'webp', 'image/svg+xml':'svg' }[t] || 'png');
+$('#exportBtn').onclick = async () => {
+  const msg = $('#exportMsg'); msg.className = 'msg';
+  const id = $('#setId').value.trim().toLowerCase();
+  const title = $('#setTitle').value.trim() || id;
+  if (!/^[a-z0-9_-]+$/.test(id)){ msg.textContent = 'セットの名前は、半角の英字・数字・ - _ で入れてください（例：kudamono）'; return; }
+  if (!state.local.length){ msg.textContent = '画像がありません'; return; }
+  const enc = new TextEncoder(), files = [], imgs = [];
+  for (let i = 0; i < state.local.length; i++){
+    const im = state.local[i];
+    const file = String(i + 1).padStart(2, '0') + '.' + extOf(im.blob.type);
+    files.push({ name:`sets/${id}/${file}`, data:new Uint8Array(await im.blob.arrayBuffer()) });
+    imgs.push({ file, name: im.name });
+  }
+  files.push({ name:`sets/${id}/set.json`, data: enc.encode(JSON.stringify({ title, images: imgs }, null, 2)) });
+  // 今あるセット一覧に追加した list.json もいっしょに入れる
+  const list = state.sets.filter(s => s.id !== id).map(s => ({ id:s.id, title:s.title || s.id }));
+  list.push({ id, title });
+  files.push({ name:'sets/list.json', data: enc.encode(JSON.stringify({ sets:list }, null, 2)) });
+  const blob = makeZip(files);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `eslot-${id}.zip`;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  msg.className = 'msg ok';
+  msg.textContent = `eslot-${id}.zip を書き出しました。ひらいて中の「sets」フォルダを、GitHubの えスロット と同じ場所にアップロードしてください。`;
+};
+
+/* ---------- リール ---------- */
+const machine = $('#machine'), namesEl = $('#names'), startBtn = $('#startBtn');
+
+function buildReels(){
+  machine.innerHTML = ''; namesEl.innerHTML = ''; state.reels = [];
+  machine.classList.remove('win');
+  const N = state.images.length;
+  for (let i = 0; i < settings.count; i++){
+    const el = document.createElement('div'); el.className = 'reel';
+    const inner = document.createElement('div'); inner.className = 'strip'; el.append(inner);
+    const cells = [];
+    for (let k = 0; k < 3; k++){
+      const c = document.createElement('div'); c.className = 'cell';
+      const img = new Image(); img.alt = ''; img.draggable = false;
+      c.append(img); inner.append(c);
+      cells.push({ el:c, img, i:-1 });
+    }
+    machine.append(el);
+    const nm = document.createElement('div'); nm.className = 'name'; namesEl.append(nm);
+    const pos = N ? Math.floor(Math.random() * N) : 0;
+    const r = { el, inner, cells, nameEl:nm, pos, vel:0, state:'idle', lastIdx:pos };
+    state.reels.push(r); render(r);
+  }
+  layout();
+}
+function render(r){
+  const N = state.images.length;
+  r.el.classList.toggle('empty', !N);
+  if (!N){ r.cells.forEach(c => { c.el.style.display = 'none'; c.i = -1; }); return; }
+  const idx = Math.floor(r.pos), frac = r.pos - idx;
+  r.cells.forEach((c, k) => {
+    const off = k - 1;
+    const ii = mod(idx + off, N);
+    c.el.style.display = '';
+    if (c.i !== ii){ c.img.src = state.images[ii].url; c.i = ii; }
+    c.el.style.transform = `translateY(${(frac - off) * 100}%)`;
+  });
+}
+function layout(){
+  const n = settings.count;
+  const gap = n === 1 ? 0 : Math.max(10, Math.min(24, innerWidth * 0.02));
+  const availW = innerWidth - 32 - 36 - gap * (n - 1);
+  const availH = innerHeight - 270;
+  const size = Math.max(90, Math.min(availW / n, availH, 380));
+  document.documentElement.style.setProperty('--size', size + 'px');
+  document.documentElement.style.setProperty('--gap', gap + 'px');
+}
+addEventListener('resize', layout);
+
+/* ---------- 音 ---------- */
+let ac = null;
+function ensureAudio(){
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+  } catch(e) {}
+}
+function tone(freq, dur, type='square', vol=0.08, when=0){
+  if (!settings.sound || !ac) return;
+  const t = ac.currentTime + when;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+const sfx = {
+  tick(){ tone(1300, 0.03, 'square', 0.035); },
+  stop(){ tone(1760, 0.14, 'square', 0.09); },
+  jaan(){
+    [523.25, 659.25, 783.99].forEach((f, i) => tone(f, 0.13, 'square', 0.07, i * 0.09));
+    [523.25, 659.25, 783.99, 1046.5].forEach(f => tone(f, 1.2, 'sawtooth', 0.035, 0.3));
+    [523.25, 1046.5].forEach(f => tone(f, 1.2, 'triangle', 0.08, 0.3));
+  }
+};
+
+/* ---------- アニメーション ---------- */
+let rafOn = false, lastT = 0, lastTick = 0;
+function kick(){ if (!rafOn){ rafOn = true; lastT = performance.now(); requestAnimationFrame(loop); } }
+function loop(t){
+  const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+  let active = false, ticked = false;
+  for (const r of state.reels){
+    let v = 0;
+    if (r.state === 'spin'){
+      r.vel = r.maxVel * Math.min(1, (t - r.t0) / 300);
+      r.pos += r.vel * dt; v = r.vel; active = true;
+    } else if (r.state === 'stopping'){
+      const x = Math.min(1, (t - r.stopStart) / r.stopDur);
+      const D = r.stopTo - r.stopFrom;
+      r.pos = r.stopFrom + D * (1 - Math.pow(1 - x, 3));
+      v = 3 * Math.pow(1 - x, 2) * D / (r.stopDur / 1000);
+      r.vel = v;
+      if (x >= 1){ r.pos = r.stopTo; r.state = 'idle'; r.vel = 0; v = 0; landed(r); }
+      else active = true;
+    }
+    const fi = Math.floor(r.pos + 1e-6);
+    if (fi !== r.lastIdx){ r.lastIdx = fi; if (r.state !== 'idle') ticked = true; }
+    r.inner.style.filter = v > 8 ? `blur(${Math.min(3, (v - 8) * 0.25).toFixed(2)}px)` : 'none';
+    render(r);
+  }
+  if (ticked && t - lastTick > 40){ lastTick = t; sfx.tick(); }
+  if (active) requestAnimationFrame(loop); else rafOn = false;
+}
+function stopReel(r){
+  return new Promise(res => {
+    const N = state.images.length;
+    const v = Math.max(r.vel, 5);
+    let F = Math.ceil(r.pos + v * 0.3);
+    F += mod(r.target - F, N);
+    const D = F - r.pos;
+    r.stopFrom = r.pos; r.stopTo = F;
+    r.stopDur = Math.min(1700, Math.max(700, 3 * D / v * 1000));
+    r.stopStart = performance.now();
+    r.state = 'stopping'; r.onDone = res;
+    kick();
+  });
+}
+function landed(r){
+  r.el.classList.remove('pop'); void r.el.offsetWidth; r.el.classList.add('pop');
+  sfx.stop();
+  if (r.onDone){ const f = r.onDone; r.onDone = null; f(); }
+}
+
+/* ---------- 抽選 ---------- */
+function pickTargets(){
+  const N = state.images.length, n = settings.count;
+  const rand = () => Math.floor(Math.random() * N);
+  if (settings.mode === 'preset'){
+    const out = [];
+    for (let i = 0; i < n; i++){
+      const k = settings.preset[i] ? state.images.findIndex(im => im.id === settings.preset[i]) : -1;
+      out.push(k);
+    }
+    const used = new Set(out.filter(k => k >= 0));
+    return out.map(k => {
+      if (k >= 0) return k;
+      const pool = [...Array(N).keys()].filter(x => !used.has(x));
+      const c = (settings.noDup && pool.length) ? pool[Math.floor(Math.random() * pool.length)] : rand();
+      used.add(c); return c;
+    });
+  }
+  if (settings.noDup && N >= n){
+    const arr = [...Array(N).keys()];
+    for (let i = arr.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr.slice(0, n);
+  }
+  return Array.from({ length:n }, rand);
+}
+
+async function start(){
+  if (state.spinning) return;
+  if (!state.images.length){ openSettings(); return; }
+  ensureAudio();
+  state.spinning = true; startBtn.disabled = true; $('#gearBtn').disabled = true;
+  machine.classList.remove('win');
+  state.reels.forEach(r => r.nameEl.classList.remove('show'));
+
+  const targets = pickTargets();
+  const now = performance.now();
+  state.reels.forEach((r, i) => {
+    r.state = 'spin'; r.t0 = now; r.vel = 0;
+    r.maxVel = 22 * (0.92 + Math.random() * 0.16);
+    r.target = targets[i];
+  });
+  kick();
+  await sleep({ short:900, normal:1800, long:3200 }[settings.duration] || 1800);
+
+  const waits = [];
+  for (let i = 0; i < state.reels.length; i++){
+    waits.push(stopReel(state.reels[i]));
+    if (i < state.reels.length - 1) await sleep(650);
+  }
+  await Promise.all(waits);
+  await sleep(180);
+
+  machine.classList.add('win');
+  sfx.jaan();
+  confetti();
+  const N = state.images.length;
+  state.reels.forEach(r => {
+    r.nameEl.textContent = state.images[mod(Math.round(r.pos), N)].name;
+    if (settings.showNames) r.nameEl.classList.add('show');
+  });
+  state.spinning = false; startBtn.disabled = false; $('#gearBtn').disabled = false;
+}
+
+/* ---------- 紙吹雪 ---------- */
+function confetti(){
+  const cv = $('#fx'), ctx = cv.getContext('2d');
+  const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  const colors = ['#ffca28','#ff5c8a','#66bb6a','#42a5f5','#ab47bc','#ff7043','#26c6da'];
+  const box = machine.getBoundingClientRect();
+  const ps = Array.from({ length:150 }, (_, i) => ({
+    x: box.left + Math.random() * box.width, y: box.top + box.height * 0.3,
+    vx: (Math.random() - .5) * 14, vy: -Math.random() * 15 - 5,
+    r: Math.random() * 7 + 5, c: colors[i % colors.length],
+    a: Math.random() * 6, va: (Math.random() - .5) * 0.3
+  }));
+  const t0 = performance.now();
+  (function f(t){
+    const el = t - t0;
+    ctx.clearRect(0, 0, W, H);
+    for (const q of ps){
+      q.vy += 0.35; q.vx *= 0.99; q.x += q.vx; q.y += q.vy; q.a += q.va;
+      ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a);
+      ctx.globalAlpha = Math.max(0, 1 - el / 2800); ctx.fillStyle = q.c;
+      ctx.fillRect(-q.r / 2, -q.r / 4, q.r, q.r / 2); ctx.restore();
+    }
+    if (el < 2800) requestAnimationFrame(f); else ctx.clearRect(0, 0, W, H);
+  })(t0);
+}
+
+/* ---------- 設定画面 ---------- */
+const settingsEl = $('#settings');
+function openSettings(){ if (state.spinning) return; syncUI(); renderSources(); settingsEl.hidden = false; }
+function closeSettings(){ settingsEl.hidden = true; }
+$('#gearBtn').onclick = openSettings;
+$('#closeBtn').onclick = closeSettings;
+settingsEl.addEventListener('click', e => { if (e.target === settingsEl) closeSettings(); });
+
+document.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const key = seg.dataset.key;
+    const val = key === 'count' ? Number(b.dataset.v) : seg.dataset.bool ? b.dataset.v === 'true' : b.dataset.v;
+    if (settings[key] === val) return;
+    settings[key] = val; save(); syncUI(); applyText();
+    if (key === 'count'){ buildReels(); renderPreset(); }
+  });
+});
+document.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
+  cb.addEventListener('change', () => { settings[cb.dataset.key] = cb.checked; save(); });
+});
+function applyText(){
+  $('#title').style.visibility = settings.showTitle ? 'visible' : 'hidden';
+  state.reels.forEach(r => { if (!settings.showNames) r.nameEl.classList.remove('show'); else if (r.nameEl.textContent && !state.spinning) r.nameEl.classList.add('show'); });
+}
+function syncUI(){
+  document.querySelectorAll('.seg').forEach(seg => {
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(settings[seg.dataset.key]) === b.dataset.v));
+  });
+  document.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => cb.checked = !!settings[cb.dataset.key]);
+  $('#randomOpts').hidden = settings.mode !== 'random';
+  $('#presetOpts').hidden = settings.mode !== 'preset';
+}
+function reelLabels(n){ return n === 1 ? ['リール'] : n === 2 ? ['ひだり','みぎ'] : ['ひだり','まんなか','みぎ']; }
+function renderPreset(){
+  const box = $('#presetBox'); box.innerHTML = '';
+  const labels = reelLabels(settings.count);
+  for (let i = 0; i < settings.count; i++){
+    const row = document.createElement('div'); row.className = 'prow';
+    const lb = document.createElement('div'); lb.className = 'plabel'; lb.textContent = labels[i];
+    const chips = document.createElement('div'); chips.className = 'chips';
+    const mk = (id, content) => {
+      const b = document.createElement('button'); b.className = 'chip';
+      if ((settings.preset[i] || null) === id) b.classList.add('on');
+      if (typeof content === 'string') b.textContent = content; else b.append(content);
+      b.onclick = () => { settings.preset[i] = id; save(); renderPreset(); };
+      chips.append(b);
+    };
+    mk(null, '❓おまかせ');
+    state.images.forEach(im => { const img = new Image(); img.src = im.url; img.alt = im.name; mk(im.id, img); });
+    row.append(lb, chips); box.append(row);
+  }
+}
+function renderImageList(){
+  const g = $('#imgGrid'); g.innerHTML = '';
+  const local = isLocal();
+  state.images.forEach(im => {
+    const card = document.createElement('div'); card.className = 'card';
+    const th = document.createElement('div'); th.className = 'th';
+    const img = new Image(); img.src = im.url; img.alt = ''; th.append(img);
+    const inp = document.createElement('input'); inp.value = im.name; inp.setAttribute('aria-label', '名前');
+    card.append(th, inp);
+    if (local){
+      inp.onchange = () => { im.name = inp.value.trim() || '画像'; dbPut({ id:im.id, name:im.name, blob:im.blob, order:im.order }); renderPreset(); };
+      const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', '消す');
+      del.onclick = async () => {
+        await dbDel(im.id); URL.revokeObjectURL(im.url);
+        state.local = state.local.filter(x => x !== im); state.images = state.local;
+        afterImagesChanged();
+      };
+      card.append(del);
+    } else inp.disabled = true;
+    g.append(card);
+  });
+}
+
+$('#addBtn').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+$('#sampleBtn').onclick = async () => addFiles(await sampleFiles());
+let clearArmed = false;
+$('#clearBtn').onclick = async () => {
+  const b = $('#clearBtn');
+  if (!clearArmed){
+    clearArmed = true; b.textContent = 'もう一度おすと消えます';
+    setTimeout(() => { clearArmed = false; b.textContent = '画像をすべて消す'; }, 3000);
+    return;
+  }
+  clearArmed = false; b.textContent = '画像をすべて消す';
+  await dbClear(); state.local.forEach(i => URL.revokeObjectURL(i.url));
+  state.local = []; state.images = state.local;
+  afterImagesChanged();
+};
+const drop = $('#drop');
+['dragenter','dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (isLocal()) drop.classList.add('over'); }));
+document.addEventListener('dragleave', e => { if (e.target === document.documentElement || !e.relatedTarget) drop.classList.remove('over'); });
+document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+document.addEventListener('paste', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const files = [...(e.clipboardData ? e.clipboardData.items : [])].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+  if (files.length){ e.preventDefault(); addFiles(files); }
+});
+
+startBtn.onclick = start;
+document.addEventListener('keydown', e => {
+  if (!settingsEl.hidden) { if (e.key === 'Escape') closeSettings(); return; }
+  if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); start(); }
+});
+
+/* ---------- 起動 ---------- */
+(async () => {
+  try { db = await openDB(); } catch(e) { db = null; }
+  await loadLocal();
+  // 保存が使えない環境や、はじめて開いたときはサンプルを入れる
+  if (!state.local.length && (!db || !settings.samplesLoaded)){
+    const files = await sampleFiles();
+    let order = Date.now();
+    for (const f of files){
+      const o = { id:'i' + order + Math.random().toString(36).slice(2,6), name:f.name.replace(/\.[^.]+$/, ''), blob:f, order:order++ };
+      await dbPut(o); state.local.push({ ...o, url: URL.createObjectURL(f) });
+    }
+    if (db){ settings.samplesLoaded = true; save(); }
+  }
+  state.images = state.local;
+  await loadSetList();
+  const q = new URLSearchParams(location.search).get('set');
+  const want = q || settings.source;
+  buildReels(); syncUI(); applyText();
+  if (want && want !== 'local') await useSource(want);
+  else { settings.source = 'local'; afterImagesChanged(); }
+  buildReels();
+})();
+})();
+</script>
+</body>
+</html>
