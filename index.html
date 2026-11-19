@@ -154,6 +154,11 @@ label.chk input{width:22px;height:22px}
       <div id="presetBox"></div>
     </div>
 
+    <h3>回り方</h3>
+    <div class="seg" data-key="spinSpeed">
+      <button data-v="normal">ふつう</button><button data-v="slow">ゆっくり</button><button data-v="veryslow">とてもゆっくり</button>
+    </div>
+
     <h3>止まり方・音</h3>
     <div class="seg" data-key="duration">
       <button data-v="short">はやめ</button><button data-v="normal">ゆっくり</button><button data-v="long">とてもゆっくり</button>
@@ -213,7 +218,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SETS_DIR = 'sets/';
 
 /* ---------- 設定 ---------- */
-const defaults = { count:3, mode:'random', noDup:true, preset:[null,null,null], sound:true, duration:'normal', showNames:true, samplesLoaded:false, source:'local', sourceChosen:false, showTitle:true };
+const defaults = { count:3, mode:'random', noDup:true, preset:[null,null,null], sound:true, duration:'normal', spinSpeed:'normal', showNames:true, samplesLoaded:false, source:'local', sourceChosen:false, showTitle:true };
 let settings = Object.assign({}, defaults);
 try { Object.assign(settings, JSON.parse(localStorage.getItem('eslotSettings') || '{}')); } catch(e) {}
 function save(){ try { localStorage.setItem('eslotSettings', JSON.stringify(settings)); } catch(e) {} }
@@ -519,6 +524,7 @@ function loop(t){
     if (r.state === 'spin'){
       r.vel = r.maxVel * Math.min(1, (t - r.t0) / 300);
       r.pos += r.vel * dt; v = r.vel; active = true;
+      if (r.arm && r.pos >= r.armAt){ r.arm = false; beginStop(r, r.pos, r.armTo, Math.max(r.vel, 3)); }
     } else if (r.state === 'stopping'){
       const x = Math.min(1, (t - r.stopStart) / r.stopDur);
       const D = r.stopTo - r.stopFrom;
@@ -536,19 +542,22 @@ function loop(t){
   if (ticked && t - lastTick > 40){ lastTick = t; sfx.tick(); }
   if (active) requestAnimationFrame(loop); else rafOn = false;
 }
+function beginStop(r, from, to, v){
+  r.stopFrom = from; r.stopTo = to;
+  r.stopDur = 4 * (to - from) / v * 1000;
+  r.stopStart = performance.now();
+  r.state = 'stopping';
+}
 function stopReel(r, T){
   return new Promise(res => {
     const N = state.images.length;
-    const v = Math.max(r.vel, 8);
-    // T秒かけて、ターゲットの絵にぴったり止まる位置を選ぶ（出だしの速さを変えないよう T から距離を決める）
-    const want = r.pos + v * T / 4;
-    let F = r.target + Math.round((want - r.target) / N) * N;
-    if (F < r.pos + v * T / 8) F += N;
-    const D = F - r.pos;
-    r.stopFrom = r.pos; r.stopTo = F;
-    r.stopDur = 4 * D / v * 1000;
-    r.stopStart = performance.now();
-    r.state = 'stopping'; r.onDone = res;
+    const v = Math.max(r.vel, 3);
+    // いまの速さのまま、T秒くらいかけてなめらかに止まる。ちょうどよい位置が遠いときは、そこまで同じ速さで回りつづける
+    const Dn = v * T / 4, Dlo = 0.75 * Dn, Dhi = 1.6 * Dn;
+    const F = r.target + Math.ceil((r.pos + Dlo - r.target) / N) * N;
+    r.onDone = res;
+    if (F - r.pos <= Dhi){ beginStop(r, r.pos, F, v); }
+    else { r.armAt = F - Dhi; r.armTo = F; r.arm = true; }
     kick();
   });
 }
@@ -606,7 +615,7 @@ function start(){
   const now = performance.now();
   state.reels.forEach((r, i) => {
     r.state = 'spin'; r.t0 = now; r.vel = 0;
-    r.maxVel = 22 * (0.92 + Math.random() * 0.16);
+    r.maxVel = ({ normal:22, slow:12, veryslow:7 }[settings.spinSpeed] || 22) * (0.92 + Math.random() * 0.16);
     r.target = targets[i];
   });
   kick();
